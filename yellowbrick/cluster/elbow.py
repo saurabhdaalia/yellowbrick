@@ -29,6 +29,7 @@ from ..style.palettes import LINE_COLOR
 from ..exceptions import YellowbrickValueError, YellowbrickWarning
 from ..utils import KneeLocator
 
+from joblib import Parallel, delayed
 from sklearn.metrics import silhouette_score
 from sklearn.metrics import calinski_harabaz_score
 from sklearn.metrics.pairwise import pairwise_distances
@@ -105,6 +106,14 @@ def distortion_score(X, labels, metric='euclidean'):
         distortion += distances.sum()
 
     return distortion
+
+
+def fit_model(estimator, X, k):
+    estimator.set_params(n_clusters=k)
+    start = time.time()
+    estimator.fit(X)
+    end = time.time()
+    return estimator.inertia_, end-start
 
 
 ##########################################################################
@@ -232,7 +241,7 @@ class KElbowVisualizer(ClusteringScoreVisualizer):
     """
 
     def __init__(self, model, ax=None, k=10,
-                 metric="distortion", timings=True, locate_elbow=True, **kwargs):
+                 metric="distortion", timings=True, locate_elbow=True, n_jobs=None, **kwargs):
         super(KElbowVisualizer, self).__init__(model, ax=ax, **kwargs)
 
         # Get the scoring method
@@ -247,6 +256,7 @@ class KElbowVisualizer(ClusteringScoreVisualizer):
         self.metric = metric
         self.timings = timings
         self.locate_elbow=locate_elbow
+        self.n_jobs = n_jobs
 
         # Convert K into a tuple argument if an integer
         if isinstance(k, int):
@@ -267,7 +277,7 @@ class KElbowVisualizer(ClusteringScoreVisualizer):
         self.k_scores_ = None
 
         # Set value for n_jobs
-        self.estimator.set_params(n_jobs=n_jobs)
+        #self.estimator.set_params(n_jobs=n_jobs)
 
     def fit(self, X, y=None, **kwargs):
         """
@@ -285,19 +295,20 @@ class KElbowVisualizer(ClusteringScoreVisualizer):
             self.elbow_value_ = None
             self.elbow_score_ = None
 
-        for k in self.k_values_:
-            # Compute the start time for each  model
-            start = time.time()
+        # for k in self.k_values_:
+        #     # Compute the start time for each  model
+        #     start = time.time()
 
-            # Set the k value and fit the model
-            self.estimator.set_params(n_clusters=k)
-            self.estimator.fit(X)
+        #     # Set the k value and fit the model
+        #     self.estimator.set_params(n_clusters=k)
+        #     self.estimator.fit(X)
 
-            # Append the time and score to our plottable metrics
-            self.k_timers_.append(time.time() - start)
-            self.k_scores_.append(
-                self.scoring_metric(X, self.estimator.labels_)
-            )    
+        #     # Append the time and score to our plottable metrics
+        #     self.k_timers_.append(time.time() - start)
+        #     self.k_scores_.append(
+        #         self.scoring_metric(X, self.estimator.labels_)
+        #     )
+        self.k_scores_, self.k_timers_ = zip(*(Parallel(n_jobs=self.n_jobs, verbose=10, backend='multiprocessing')(delayed(fit_model)(self.estimator, X, k) for k in self.k_values_)))
 
         if self.locate_elbow:
             locator_kwargs = {
