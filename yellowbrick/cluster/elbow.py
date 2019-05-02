@@ -108,12 +108,13 @@ def distortion_score(X, labels, metric='euclidean'):
     return distortion
 
 
-def fit_model(estimator, X, k):
+def fit_model(estimator, X, k, score):
     estimator.set_params(n_clusters=k)
     start = time.time()
     estimator.fit(X)
     end = time.time()
-    return estimator.inertia_, end-start
+    
+    return score(X, estimator.labels_), end-start
 
 
 ##########################################################################
@@ -308,7 +309,8 @@ class KElbowVisualizer(ClusteringScoreVisualizer):
         #     self.k_scores_.append(
         #         self.scoring_metric(X, self.estimator.labels_)
         #     )
-        self.k_scores_, self.k_timers_ = zip(*(Parallel(n_jobs=self.n_jobs, verbose=10, backend='multiprocessing')(delayed(fit_model)(self.estimator, X, k) for k in self.k_values_)))
+        self.k_scores_, self.k_timers_ = zip(*(Parallel(n_jobs=self.n_jobs, verbose=10, backend='multiprocessing')(delayed(fit_model)(self.estimator, X, k, self.scoring_metric) for k in self.k_values_)))
+        print(self.k_scores_)
 
         if self.locate_elbow:
             locator_kwargs = {
